@@ -24,7 +24,12 @@ Manual reconciliation of financial transactions between internal sales records a
 2. (Optional) Create and activate a virtual environment:
    ```
    python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   # On Unix/macOS:
+   source venv/bin/activate
+   # On Windows (Command Prompt):
+   venv\Scripts\activate
+   # On Windows (Git Bash):
+   source venv/Scripts/activate
    ```
 3. Install dependencies:
    ```

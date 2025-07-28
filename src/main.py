@@ -100,10 +100,22 @@ def identify_discrepancies(merged_df: pd.DataFrame, amount_col_db: str, amount_c
         (merged_df['_merge'] == 'both') &
         (merged_df[amount_col_db] != merged_df[amount_col_csv])
     ]
-    failed_payments = merged_df[
-        (merged_df.get(status_col_db) == 'failed') |
-        (merged_df.get(f"{status_col_db}_db") == 'failed')
-    ]
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    # logging.info(f"merged_df columns: {list(merged_df.columns)}")
+    # logging.info(f"status_col_db: {status_col_db}")
+    status_candidates = ['status', 'status_db', 'status_csv']
+    found_status = [col for col in status_candidates if col in merged_df.columns]
+    # logging.info(f"Found status columns: {found_status}")
+    # Robust failed payments mask
+    status_candidates = ['status', 'status_db', 'status_csv']
+    status_col = next((col for col in status_candidates if col in merged_df.columns), None)
+    if status_col:
+        failed_payments = merged_df[merged_df[status_col] == 'failed']
+        # logging.info(f"Using status column: {status_col} for failed payments mask.")
+    else:
+        failed_payments = merged_df.iloc[0:0]  # Empty DataFrame if no status column found
+        logging.warning("No status column found for failed payments.")
     return {
         'missing_in_processor': missing_in_processor,
         'missing_in_db': missing_in_db,
@@ -159,12 +171,17 @@ if __name__ == "__main__":
         logging.info("Starting daily financial reconciliation workflow.")
         # Example config values for demonstration
         db_table = config.get('paths', 'db_table', fallback='sales')
-        column_map = {
-            # Example mapping, adjust as needed
+        db_column_map = {
             'transaction_id': 'transaction_id',
             'amount': 'amount',
             'status': 'status',
             'date': 'date'
+        }
+        csv_column_map = {
+            'payment_gateway_id': 'transaction_id',
+            'charged_amount': 'amount',
+            'status': 'status',
+            'transaction_date': 'date'
         }
         date_columns = ['date']
         merge_key = 'transaction_id'
@@ -173,23 +190,23 @@ if __name__ == "__main__":
         status_col_db = 'status_db'
 
         # Load data
-        logging.info("Loading database data.")
         db_df = load_database_data(db_path, db_table)
-        logging.info("Loading CSV data.")
         csv_df = load_csv_data(csv_path)
 
         # Clean and transform
-        logging.info("Cleaning and transforming database data.")
-        db_df = clean_and_transform(db_df, column_map, date_columns)
-        logging.info("Cleaning and transforming CSV data.")
-        csv_df = clean_and_transform(csv_df, column_map, date_columns)
+        db_df_clean = clean_and_transform(db_df, db_column_map, date_columns)
+        csv_df_clean = clean_and_transform(csv_df, csv_column_map, date_columns)
+
+        # Check for merge key presence
+        if merge_key not in db_df_clean.columns:
+            logging.error(f"Merge key '{merge_key}' not found in DB DataFrame columns: {db_df_clean.columns.tolist()}")
+        if merge_key not in csv_df_clean.columns:
+            logging.error(f"Merge key '{merge_key}' not found in CSV DataFrame columns: {csv_df_clean.columns.tolist()}")
 
         # Merge
-        logging.info("Merging dataframes.")
-        merged_df = merge_dataframes(db_df, csv_df, merge_key)
+        merged_df = merge_dataframes(db_df_clean, csv_df_clean, merge_key)
 
         # Identify discrepancies
-        logging.info("Identifying discrepancies.")
         discrepancies = identify_discrepancies(merged_df, amount_col_db, amount_col_csv, status_col_db)
 
         # Generate Excel report

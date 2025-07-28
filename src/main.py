@@ -107,14 +107,14 @@ def identify_discrepancies(merged_df: pd.DataFrame, amount_col_db: str, amount_c
     status_candidates = ['status', 'status_db', 'status_csv']
     found_status = [col for col in status_candidates if col in merged_df.columns]
     # logging.info(f"Found status columns: {found_status}")
-    # Robust failed payments mask
     status_candidates = ['status', 'status_db', 'status_csv']
     status_col = next((col for col in status_candidates if col in merged_df.columns), None)
     if status_col:
         failed_payments = merged_df[merged_df[status_col] == 'failed']
         # logging.info(f"Using status column: {status_col} for failed payments mask.")
     else:
-        failed_payments = merged_df.iloc[0:0]  # Empty DataFrame if no status column found
+        # Empty DataFrame if no status column found
+        failed_payments = merged_df.iloc[0:0]
         logging.warning("No status column found for failed payments.")
     return {
         'missing_in_processor': missing_in_processor,

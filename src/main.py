@@ -100,13 +100,6 @@ def identify_discrepancies(merged_df: pd.DataFrame, amount_col_db: str, amount_c
         (merged_df['_merge'] == 'both') &
         (merged_df[amount_col_db] != merged_df[amount_col_csv])
     ]
-    import logging
-    logging.basicConfig(level=logging.INFO)
-    # logging.info(f"merged_df columns: {list(merged_df.columns)}")
-    # logging.info(f"status_col_db: {status_col_db}")
-    status_candidates = ['status', 'status_db', 'status_csv']
-    found_status = [col for col in status_candidates if col in merged_df.columns]
-    # logging.info(f"Found status columns: {found_status}")
     status_candidates = ['status', 'status_db', 'status_csv']
     status_col = next((col for col in status_candidates if col in merged_df.columns), None)
     if status_col:
@@ -129,6 +122,7 @@ import os
 from datetime import datetime
 from openpyxl import Workbook
 
+# Logging setup (only once)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",

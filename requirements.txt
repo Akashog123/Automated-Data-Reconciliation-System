@@ -1,0 +1,6 @@
+pandas
+openpyxl>=3.1.2
+celery
+redis
+aiosmtplib
+sqlite-utils

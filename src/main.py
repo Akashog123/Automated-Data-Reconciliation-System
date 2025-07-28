@@ -9,6 +9,7 @@ import pandas as pd
 import sqlite3
 from typing import Tuple
 import configparser
+from alerts import send_alert_email
 
 # Read configuration
 config = configparser.ConfigParser()
@@ -119,17 +120,31 @@ def identify_discrepancies(merged_df: pd.DataFrame, amount_col_db: str, amount_c
 # --- Logging Setup ---
 import logging
 import os
+from logging.handlers import RotatingFileHandler
 from datetime import datetime
 from openpyxl import Workbook
 
-# Logging setup (only once)
+# Logging setup (production-grade, Linux compatible)
+LOG_PATH = os.environ.get("RECONCILIATION_LOG_PATH", "/var/log/reconciliation.log")
+LOG_MAX_BYTES = 5 * 1024 * 1024  # 5MB
+LOG_BACKUP_COUNT = 5
+
+file_handler = RotatingFileHandler(
+    LOG_PATH,
+    maxBytes=LOG_MAX_BYTES,
+    backupCount=LOG_BACKUP_COUNT,
+    encoding="utf-8"
+)
+file_handler.setLevel(logging.INFO)
+file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+
+stream_handler = logging.StreamHandler()
+stream_handler.setLevel(logging.INFO)
+stream_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.FileHandler("reconciliation.log"),
-        logging.StreamHandler()
-    ]
+    handlers=[file_handler, stream_handler]
 )
 
 def generate_excel_report(discrepancies: dict, report_dir: str, report_prefix: str):
@@ -203,6 +218,17 @@ if __name__ == "__main__":
         # Identify discrepancies
         discrepancies = identify_discrepancies(merged_df, amount_col_db, amount_col_csv, status_col_db)
 
+        # If any discrepancies found, send alert email
+        discrepancy_summary = []
+        for key, df in discrepancies.items():
+            if not df.empty:
+                discrepancy_summary.append(f"{key}: {len(df)} records")
+        if discrepancy_summary:
+            alert_subject = "Financial Reconciliation Discrepancies Detected"
+            alert_body = "Discrepancies found:\n" + "\n".join(discrepancy_summary)
+            logging.info("Triggering alert email for discrepancies.")
+            send_alert_email.delay(alert_subject, alert_body)
+
         # Generate Excel report
         generate_excel_report(discrepancies, report_dir, report_prefix)
 
@@ -210,3 +236,8 @@ if __name__ == "__main__":
 
     except Exception as e:
         logging.error(f"Error during reconciliation workflow: {e}", exc_info=True)
+        # Send alert email on workflow error
+        alert_subject = "Financial Reconciliation Workflow Error"
+        alert_body = f"Error during reconciliation workflow:\n{e}"
+        logging.info("Triggering alert email for workflow error.")
+        send_alert_email.delay(alert_subject, alert_body)
